@@ -1,0 +1,19 @@
+[package]
+name = "exoscale"
+version = "2.0.0"
+authors = [ "Ogier Bouvier <ogier@squarefactory.io" ]
+edition = "2018"
+description = "A client implementation for the exoscale API generated using openapi-generator"
+license = "MIT"
+
+[dependencies]
+serde = "^1.0"
+serde_derive = "^1.0"
+serde_json = "^1.0"
+url = "^2.2"
+
+[dependencies.reqwest]
+version = "^0.11"
+features = ["json", "multipart"]
+
+[dev-dependencies]
