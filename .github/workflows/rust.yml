@@ -11,13 +11,20 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - name: Build
-        run: cargo build --verbose
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.0.0
+
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Unit tests
+        run: cargo test --verbose
+        env:
+          EXOSCALE_API_KEY: ${{ secrets.EXOSCALE_API_KEY }}
+          EXOSCALE_SECRET: ${{ secrets.EXOSCALE_SECRET }}
 
 
   cargo-deny:
