@@ -1,7 +1,7 @@
 # Rust API client for openapi
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/SonicFrog/exoscale/Rust)
-![GitHub](https://img.shields.io/github/license/SonicFrog/repo)
+![GitHub](https://img.shields.io/github/license/SonicFrog/exoscale)
 ![Crates.io (recent)](https://img.shields.io/crates/dr/exoscale)
 
 Infrastructure automation API, allowing programmatic access to all Exoscale products and services.
