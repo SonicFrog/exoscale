@@ -1,5 +1,5 @@
 use std::fmt::Write;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use apis::configuration::Configuration;
 
@@ -24,7 +24,6 @@ pub mod models;
 pub fn sign_request(
     request: &mut Request,
     configuration: &Configuration,
-    expiration: Duration,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = String::new();
 
@@ -62,7 +61,7 @@ pub fn sign_request(
     // XXX: add an empty line for header values
     writeln!(&mut buffer).unwrap();
 
-    let expiration = (SystemTime::now() + expiration)
+    let expiration = (SystemTime::now() + configuration.expiration)
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
@@ -92,7 +91,7 @@ pub fn sign_request(
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use crate::apis::configuration::ApiKey;
 
@@ -100,7 +99,7 @@ mod test {
 
     static BASE_URL: &str = "https://api-ch-gva-2.exoscale.com/v2";
 
-    fn test_config() -> Configuration {
+    pub fn test_config() -> Configuration {
         Configuration {
             base_path: BASE_URL.parse::<Url>().unwrap().to_string(),
             api_key: ApiKey {
@@ -119,8 +118,7 @@ mod test {
 
         let mut request = reqwest::Request::new(Method::GET, url);
 
-        sign_request(&mut request, &configuration, Duration::from_secs(600))
-            .expect("failed to sign request");
+        sign_request(&mut request, &configuration).expect("failed to sign request");
 
         reqwest::Client::new()
             .execute(request)

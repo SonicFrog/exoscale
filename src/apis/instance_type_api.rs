@@ -12,6 +12,7 @@ use reqwest;
 
 use super::{configuration, Error};
 use crate::apis::ResponseContent;
+use crate::sign_request;
 
 /// struct for typed errors of method [`get_instance_type`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,7 +87,10 @@ pub async fn list_instance_types(
             local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
