@@ -25,6 +25,7 @@ jobs:
         env:
           EXOSCALE_API_KEY: ${{ secrets.EXOSCALE_API_KEY }}
           EXOSCALE_SECRET: ${{ secrets.EXOSCALE_SECRET }}
+          EXOSCALE_TEMPLATE: ${{ secrets.EXOSCALE_TEMPLATE }}
 
 
   cargo-deny:
