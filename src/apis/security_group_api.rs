@@ -11,7 +11,7 @@
 use reqwest;
 
 use super::{configuration, Error};
-use crate::apis::ResponseContent;
+use crate::{apis::ResponseContent, sign_request};
 
 /// struct for typed errors of method [`add_external_source_to_security_group`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,7 +152,8 @@ pub async fn add_rule_to_security_group(
     }
     local_var_req_builder = local_var_req_builder.json(&add_rule_to_security_group_request);
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+    let _ = sign_request(&mut local_var_req, configuration);
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -197,7 +198,8 @@ pub async fn attach_instance_to_security_group(
     local_var_req_builder =
         local_var_req_builder.json(&detach_instance_from_private_network_request);
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+    let _ = sign_request(&mut local_var_req, configuration);
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -236,7 +238,8 @@ pub async fn create_security_group(
     }
     local_var_req_builder = local_var_req_builder.json(&create_security_group_request);
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+    let _ = sign_request(&mut local_var_req, configuration);
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -280,7 +283,9 @@ pub async fn delete_rule_from_security_group(
             local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -409,7 +414,10 @@ pub async fn get_security_group(
             local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -446,7 +454,10 @@ pub async fn list_security_groups(
             local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -508,5 +519,80 @@ pub async fn remove_external_source_from_security_group(
             entity: local_var_entity,
         };
         Err(Error::ResponseError(local_var_error))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::apis::configuration::Configuration;
+    use crate::apis::instance_api::delete_instance;
+    use crate::apis::instance_api::test::{poll_operation, spawn_instance_for_size};
+    use crate::models::instance_type::Size;
+    use crate::models::{DetachInstanceFromPrivateNetworkRequest, Instance, SecurityGroup};
+    use crate::test::{test_config, test_template};
+
+    use super::*;
+
+    async fn security_group_id_by_name(config: &Configuration, name: &str) -> SecurityGroup {
+        let groups = list_security_groups(config)
+            .await
+            .expect("failed to list security groups")
+            .security_groups
+            .unwrap();
+
+        groups
+            .into_iter()
+            .find(|x| x.name.as_ref().unwrap() == name)
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn list() {
+        let config = test_config();
+
+        let groups = list_security_groups(&config)
+            .await
+            .expect("failed to list security groups");
+
+        assert!(
+            !groups.security_groups.unwrap().is_empty(),
+            "not enough security groups"
+        );
+    }
+
+    #[tokio::test]
+    async fn attach_group() {
+        let config = test_config();
+
+        let op = spawn_instance_for_size(&config, test_template(), Size::Tiny).await;
+
+        let op = poll_operation(&config, op).await;
+
+        let instance_id = op.reference.unwrap().id;
+
+        let sec_group = security_group_id_by_name(&config, "default").await;
+
+        let request = DetachInstanceFromPrivateNetworkRequest {
+            instance: Instance {
+                id: instance_id.clone(),
+                ..Default::default()
+            }
+            .into(),
+        };
+
+        let instance_id = instance_id.unwrap();
+
+        let op =
+            attach_instance_to_security_group(&config, sec_group.id.as_ref().unwrap(), request)
+                .await
+                .expect("failed to attach instance");
+
+        poll_operation(&config, op).await;
+
+        let op = delete_instance(&config, &instance_id)
+            .await
+            .expect("failed to delete instance");
+
+        poll_operation(&config, op).await;
     }
 }
