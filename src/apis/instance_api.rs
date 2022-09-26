@@ -832,32 +832,79 @@ pub async fn update_instance(
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
 
+    use crate::apis::configuration::Configuration;
     use crate::apis::instance_type_api::list_instance_types;
     use crate::apis::operation_api::get_operation;
     use crate::models::instance_type::Size;
     use crate::models::operation::State;
-    use crate::models::{CreateInstanceRequest, InstanceType, Template};
+    use crate::models::{CreateInstanceRequest, InstanceType, Operation, Template};
     use crate::test::test_config;
+
+    /// Get an instance type id for some specified instance size
+    pub async fn get_id_for_size(config: &Configuration, size: Size) -> String {
+        let types = list_instance_types(config)
+            .await
+            .expect("failed to list instance types");
+
+        types
+            .instance_types
+            .expect("no instance types available")
+            .into_iter()
+            .find(|x| x.size.unwrap() == size)
+            .expect("no instance types available for tiny")
+            .id
+            .unwrap()
+    }
+
+    /// Poll an operation to completion either returning the operation or panicking
+    pub async fn poll_operation(config: &Configuration, mut op: Operation) -> Operation {
+        assert_eq!(op.state.unwrap(), State::Pending);
+
+        while op.state.unwrap() == State::Pending {
+            op = get_operation(config, &op.id.unwrap())
+                .await
+                .expect("failed to get operation state");
+        }
+
+        assert_eq!(op.state.unwrap(), State::Success);
+
+        op
+    }
+
+    /// Spawn an instance with given template and size
+    pub async fn spawn_instance_for_size(
+        config: &Configuration,
+        template: Template,
+        size: Size,
+    ) -> Operation {
+        let instance_type_id = get_id_for_size(config, size).await;
+
+        dbg!(&instance_type_id);
+
+        let request = CreateInstanceRequest {
+            instance_type: InstanceType {
+                id: instance_type_id.into(),
+                ..Default::default()
+            }
+            .into(),
+            template: template.into(),
+            disk_size: 50,
+            ..Default::default()
+        };
+
+        create_instance(config, request)
+            .await
+            .expect("failed to create instance")
+    }
 
     #[tokio::test]
     async fn create_delete_instance() {
         let config = test_config();
 
-        let types = list_instance_types(&config)
-            .await
-            .expect("failed to list instance types");
-
-        let instance_type_id = types
-            .instance_types
-            .expect("no instance types available")
-            .into_iter()
-            .find(|x| x.size.unwrap() == Size::Tiny)
-            .expect("no instance types available for tiny")
-            .id
-            .unwrap();
+        let instance_type_id = get_id_for_size(&config, Size::Tiny).await;
 
         let create_request = CreateInstanceRequest {
             instance_type: InstanceType {
@@ -866,7 +913,7 @@ mod test {
             }
             .into(),
             template: Template {
-                id: "880ba79e-d78e-40cc-9c8a-e3f3e70753a8".to_string().into(),
+                id: env!("EXOSCALE_TEMPLATE").to_string().into(),
                 ..Default::default()
             }
             .into(),
@@ -874,20 +921,11 @@ mod test {
             ..Default::default()
         };
 
-        let mut operation = create_instance(&config, create_request)
+        let operation = create_instance(&config, create_request)
             .await
             .expect("failed to create instance");
 
-        assert_eq!(operation.state.unwrap(), State::Pending);
-
-        while operation.state.unwrap() == State::Pending {
-            operation = get_operation(&config, &operation.id.unwrap())
-                .await
-                .expect("failed to get operation state");
-        }
-
-        assert_eq!(operation.state.unwrap(), State::Success);
-
+        let operation = poll_operation(&config, operation).await;
         let instance_id = operation.reference.unwrap().id.unwrap();
 
         delete_instance(&config, &instance_id)
