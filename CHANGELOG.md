@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.0](https://github.com/SonicFrog/exoscale/compare/v2.0.0...v2.1.0) (2022-09-26)
+
+
+### Features
+
+* **auth:** allow request signing for authentication ([4c3a96f](https://github.com/SonicFrog/exoscale/commit/4c3a96f4c74fb3eb58ff2e32808356ad9dd8e34d))
+* **auth:** sign request when accessing operations ([b48ea81](https://github.com/SonicFrog/exoscale/commit/b48ea81d192231614858f0c8ec73aeedb1a9f7d2))
+* **auth:** sign requests in instance_api ([33fc855](https://github.com/SonicFrog/exoscale/commit/33fc855e4db9d093f0cf474bb948c8f77c4c3583))
+
+
+### Bug Fixes
+
+* **ci:** fix typo in runner os ([48dd38f](https://github.com/SonicFrog/exoscale/commit/48dd38fb2b6abeffd527b652dd9f878b00c51801))
+* **security_group:** sign requests in sec group api ([e6827dc](https://github.com/SonicFrog/exoscale/commit/e6827dcfcae0e99c222c53703c482bcc28c8276c))
+
 ## 2.0.0 (2022-07-22)
 
 
