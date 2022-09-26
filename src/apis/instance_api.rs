@@ -11,7 +11,7 @@
 use reqwest;
 
 use super::{configuration, Error};
-use crate::apis::ResponseContent;
+use crate::{apis::ResponseContent, sign_request};
 
 /// struct for typed errors of method [`add_instance_protection`]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,7 +186,10 @@ pub async fn create_instance(
     }
     local_var_req_builder = local_var_req_builder.json(&create_instance_request);
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -270,7 +273,10 @@ pub async fn delete_instance(
             local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -531,7 +537,10 @@ pub async fn reset_instance_field(
             local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -707,7 +716,10 @@ pub async fn start_instance(
     }
     local_var_req_builder = local_var_req_builder.json(&start_instance_request);
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -749,7 +761,10 @@ pub async fn stop_instance(
             local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
     }
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -793,7 +808,10 @@ pub async fn update_instance(
     }
     local_var_req_builder = local_var_req_builder.json(&update_instance_request);
 
-    let local_var_req = local_var_req_builder.build()?;
+    let mut local_var_req = local_var_req_builder.build()?;
+
+    let _ = sign_request(&mut local_var_req, configuration);
+
     let local_var_resp = local_var_client.execute(local_var_req).await?;
 
     let local_var_status = local_var_resp.status();
@@ -810,5 +828,108 @@ pub async fn update_instance(
             entity: local_var_entity,
         };
         Err(Error::ResponseError(local_var_error))
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    use crate::apis::configuration::Configuration;
+    use crate::apis::instance_type_api::list_instance_types;
+    use crate::apis::operation_api::get_operation;
+    use crate::models::instance_type::Size;
+    use crate::models::operation::State;
+    use crate::models::{CreateInstanceRequest, InstanceType, Operation, Template};
+    use crate::test::test_config;
+
+    /// Get an instance type id for some specified instance size
+    pub async fn get_id_for_size(config: &Configuration, size: Size) -> String {
+        let types = list_instance_types(config)
+            .await
+            .expect("failed to list instance types");
+
+        types
+            .instance_types
+            .expect("no instance types available")
+            .into_iter()
+            .find(|x| x.size.unwrap() == size)
+            .expect("no instance types available for tiny")
+            .id
+            .unwrap()
+    }
+
+    /// Poll an operation to completion either returning the operation or panicking
+    pub async fn poll_operation(config: &Configuration, mut op: Operation) -> Operation {
+        assert_eq!(op.state.unwrap(), State::Pending);
+
+        while op.state.unwrap() == State::Pending {
+            op = get_operation(config, &op.id.unwrap())
+                .await
+                .expect("failed to get operation state");
+        }
+
+        assert_eq!(op.state.unwrap(), State::Success);
+
+        op
+    }
+
+    /// Spawn an instance with given template and size
+    pub async fn spawn_instance_for_size(
+        config: &Configuration,
+        template: Template,
+        size: Size,
+    ) -> Operation {
+        let instance_type_id = get_id_for_size(config, size).await;
+
+        dbg!(&instance_type_id);
+
+        let request = CreateInstanceRequest {
+            instance_type: InstanceType {
+                id: instance_type_id.into(),
+                ..Default::default()
+            }
+            .into(),
+            template: template.into(),
+            disk_size: 50,
+            ..Default::default()
+        };
+
+        create_instance(config, request)
+            .await
+            .expect("failed to create instance")
+    }
+
+    #[tokio::test]
+    async fn create_delete_instance() {
+        let config = test_config();
+
+        let instance_type_id = get_id_for_size(&config, Size::Tiny).await;
+
+        let create_request = CreateInstanceRequest {
+            instance_type: InstanceType {
+                id: instance_type_id.into(),
+                ..Default::default()
+            }
+            .into(),
+            template: Template {
+                id: env!("EXOSCALE_TEMPLATE").to_string().into(),
+                ..Default::default()
+            }
+            .into(),
+            disk_size: 50,
+            ..Default::default()
+        };
+
+        let operation = create_instance(&config, create_request)
+            .await
+            .expect("failed to create instance");
+
+        let operation = poll_operation(&config, operation).await;
+        let instance_id = operation.reference.unwrap().id.unwrap();
+
+        delete_instance(&config, &instance_id)
+            .await
+            .expect("failed to delete instance");
     }
 }
